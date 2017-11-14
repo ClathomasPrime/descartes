@@ -27,9 +27,9 @@ _summary = unlines ["descartes - v0.2","Cartersian Hoare Logic Verifier.","Copyr
 _program = "descartes"
 _help    = "The input parameter is a Java project directory."
 
-data Property = P1 | P2 | P3
-  deriving (Show, Data, Typeable, Eq)
-  
+-- data Property = P1 | P2 | P3
+--   deriving (Show, Data, Typeable, Eq)
+
 data Option =
   Verify {input :: FilePath
          ,prop :: Int
@@ -50,7 +50,7 @@ progModes = cmdArgsMode $ modes [verifyMode]
          &= program _program
          &= summary _summary
 
--- | 'main' function 
+-- | 'main' function
 main :: IO ()
 main = do options <- cmdArgsRun progModes
           runOption options
@@ -59,13 +59,17 @@ runOption :: Option -> IO ()
 runOption (Verify path p mode logLevel) =
   descartes_main logLevel mode path (arity p) (toProp p) (showProp p)
 
+-- The k in "k-safety property (maybe)"
 arity :: Int -> Int
-arity 1 = 2 
+arity 1 = 2
 arity 2 = 3
 arity 3 = 3
+
 arity 4 = 3
 arity 5 = 2
 arity 6 = 2
+
+arity 101 = 3
 
 toProp :: Int -> Prop
 toProp 1 = prop1
@@ -74,6 +78,7 @@ toProp 3 = prop3
 toProp 4 = prop4
 toProp 5 = prop5
 toProp 6 = prop6
+toProp 101 = prop101
 
 showProp :: Int -> String
 showProp 1 = "[Anti-symmetry] (compare): forall x and y, sgn(compare(x,y)) == −sgn(compare(y,x))"
@@ -86,23 +91,25 @@ showProp 5 = "[Symmetry] (equals): for any non-null reference values x and y,"
           ++ " x.equals(y) should return true if and only if y.equals(x) returns true."
 showProp 6 = "[Consistency] (equals): for any non-null reference values x and y,"
           ++ " multiple invocations of x.equals(y) consistently return true or consistently return false."
-  
-front_end :: FilePath -> IO ()
-front_end file = do
-  ast <- parser compilationUnit `fmap` readFile file 
-  case ast of 
-    Left e -> print $ file ++ ": " ++ show e
-    Right cu -> print cu
-    
+showProp 101 = "[Homomorphism]"
+
+-- front_end :: FilePath -> IO ()
+-- front_end file = do
+--   ast <- parser compilationUnit `fmap` readFile file
+--   case ast of
+--     Left e -> print $ file ++ ": " ++ show e
+--     Right cu -> print cu
+
 descartes_main :: Int -> Int -> FilePath -> Int -> Prop -> String -> IO ()
-descartes_main logLevel mode file arity prop propName = do 
-  ast <- parser compilationUnit `fmap` readFile file 
-  case ast of 
-    Left e -> print $ file ++ ": " ++ show e
+descartes_main logLevel mode file arity prop propName = do
+  ast <- parser compilationUnit `fmap` readFile file
+  case ast of
+    Left e -> print $ file ++ " hi hi: " ++ show e
     Right cu -> do
       let classMap = getInfo cu
           comps = getComps cu
-          comparators = map (\c -> map (\idx -> rename idx c) [1..arity]) comps
+          comparators
+            = map (\c -> map (\idx -> rename idx c) [1..arity]) comps
       if logLevel > 0
       then do
 --        putStrLn $ show classMap
@@ -111,8 +118,9 @@ descartes_main logLevel mode file arity prop propName = do
         descartes mode classMap (head comparators) prop propName
       else descartes mode classMap (head comparators) prop propName
 
-descartes mode classMap comparator prop propName = do 
-  (vals, models) <- case mode of 
+descartes ::  Int -> ClassMap -> [Comparator] -> Prop -> [Char] -> IO ()
+descartes mode classMap comparator prop propName = do
+  (vals, models) <- case mode of
     0 -> evalZ3 $ verify True classMap comparator prop
     1 -> evalZ3 $ verify False classMap comparator prop
     2 -> evalZ3 $ verifyWithSelf classMap comparator prop

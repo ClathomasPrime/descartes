@@ -8,15 +8,24 @@ Build-Type:         Simple
 
 Executable descartes
     Main-Is:          Main.hs
-    Build-Depends:    base          
-                    , containers    
-                    , filepath   
+    Build-Depends:    base
+                    , containers
+                    , filepath
                     , directory
-                    , mtl           
+                    , mtl
                     , cmdargs
-                    , language-java
-                    , z3
+                    , language-java == 0.2.7
+                    , z3 == 4.1.2
     Hs-Source-Dirs:   src/
     ghc-options:      -O3 -rtsopts
     Extensions:       DoAndIfThenElse
-
+    other-modules: Analysis.Axioms
+                 , Analysis.Consolidation
+                 , Analysis.Engine
+                 , Analysis.Hoare
+                 , Analysis.Invariant
+                 , Analysis.Product
+                 , Analysis.Properties
+                 , Analysis.SelfComposition
+                 , Analysis.Types
+                 , Analysis.Util

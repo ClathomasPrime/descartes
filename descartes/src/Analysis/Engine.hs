@@ -22,19 +22,22 @@ import Z3.Monad hiding (Params)
 import qualified Data.Map as M
 import qualified Debug.Trace as T
 
-trace a b = b
---trace = T.trace
+-- trace a b = b
+trace = T.trace
 
 -- Performs a SAT-query.
 checkSAT phi = do
-  push 
+  push
   assert phi
   res <- check
   pop 1
   return res
-  
+
+-- checking if
+-- axioms |= pre -> post
+helper :: AST -> AST -> AST -> Z3 (Result, Maybe Model)
 helper axioms pre post = do
-  assert axioms    
+  assert axioms
   formula <- mkImplies pre post >>= \phi -> mkNot phi -- >>= \psi -> mkAnd [axioms, psi]
   assert formula
   (r, m) <- getModel
@@ -50,7 +53,8 @@ getInitialSSAMap = do
 -- result: (ObjectType, Parameters, Results)
 prelude :: ClassMap -> [Comparator] -> Z3 (Sort, Params, [AST], Fields)
 prelude classMap comps = do
-  let arity = length comps
+  mapM_ T.traceShowM comps
+  let arity = T.traceShowId $ length comps
   if arity == 0
   then error "init: empty comparators"
   else do
@@ -75,7 +79,7 @@ mkAttribute objSort m mDecl =
   case mDecl of
     FieldDecl  mods ty vardecls -> do
       retSort <- processType ty
-      foldM (\nm vardecl -> mkField nm vardecl objSort retSort) m vardecls 
+      foldM (\nm vardecl -> mkField nm vardecl objSort retSort) m vardecls
     MethodDecl mods ty (Just rty) (Ident name) pars exTy (MethodBody Nothing) -> trace ("processing " ++ name ++ " " ++ show (rty,pars) ) $ do
       retSort <- processType rty
       i <- mkIntSort
@@ -96,7 +100,7 @@ mkField m (VarDecl (VarId (Ident name)) Nothing) parSort retSort = do
 
 -- Processing Functions
 processParam :: FormalParam -> Z3 Sort
-processParam (FormalParam mods ty _ _) = processType ty 
+processParam (FormalParam mods ty _ _) = processType ty
 
 processType :: Type -> Z3 Sort
 processType (PrimType ty) =
@@ -111,7 +115,7 @@ processType ty@(RefType _) = error $ "processType: not supported " ++ show ty
 
 processAssign :: AST -> AssignOp -> AST -> AST -> Z3 AST
 processAssign lhs op rhs plhs =
-  case op of 
+  case op of
     EqualA -> mkEq lhs rhs
     AddA -> do
       rhs' <- mkAdd [plhs, rhs]
@@ -138,7 +142,7 @@ processNewVar (objSort, pars, res, fields, ssamap', _assmap, pre') sort (VarDecl
       let assmap = M.insert ident expr _assmap
       return (nssamap, assmap, pre)
     Just _ -> error "processNewVar: not supported"
-    
+
 processExp :: (Sort, Params, [AST], Fields, SSAMap) -> Exp -> Z3 AST
 processExp env@(objSort, pars, res, fields, ssamap) expr =
   case expr of
@@ -149,7 +153,7 @@ processExp env@(objSort, pars, res, fields, ssamap) expr =
       rhs <- processExp env rhsE
       processBinOp op lhs rhs
     FieldAccess fldAccess -> error "processExp: FieldAccess not supported"
-    PreMinus nexpr -> do 
+    PreMinus nexpr -> do
       nexprEnc <- processExp env nexpr
       mkUnaryMinus nexprEnc
     MethodInv (MethodCall name args) -> do
@@ -159,10 +163,10 @@ processExp env@(objSort, pars, res, fields, ssamap) expr =
       condEnc <- processExp env cond
       _thenEnc <- processExp env _then
       _elseEnc <- processExp env _else
-      mkIte condEnc _thenEnc _elseEnc        
+      mkIte condEnc _thenEnc _elseEnc
     PreNot nexpr -> do
       nexprEnc <- processExp env nexpr
-      mkNot nexprEnc            
+      mkNot nexprEnc
     _ -> error $  "processExpr: " ++ show expr
 
 processLit :: Literal -> Z3 AST
@@ -184,7 +188,7 @@ processName env@(objSort, pars, res, fields, ssamap) (Name [obj]) [] =
       Just (ast,_,_) -> return ast
     Just ast -> return ast
 processName env@(objSort, pars, res, fields, ssamap) (Name [ident]) args = do
-  let fn = safeLookup ("processName: declared func")  ident fields
+  let fn = safeLookup ("processName: declared func" ++ show ident)  ident fields
   mkApp fn args
 processName env@(objSort, pars, res, fields, ssamap) (Name [Ident "Character",fnName]) args = do
   let fn = safeLookup ("processName: Field" ++ show fnName)  fnName fields
@@ -208,7 +212,7 @@ processName env@(objSort, pars, res, fields, ssamap) (Name [obj,field]) args = d
 processName env name args = error $  "processName: corner case" ++ show name
 
 processBinOp :: Op -> AST -> AST -> Z3 AST
-processBinOp op lhs rhs = do 
+processBinOp op lhs rhs = do
   case op of
     NotEq -> mkEq lhs rhs >>= \eq -> mkNot eq
     And -> mkAnd [lhs,rhs]
@@ -223,7 +227,7 @@ processBinOp op lhs rhs = do
     COr -> mkOr [lhs, rhs]
     CAnd -> mkAnd [lhs, rhs]
     _ -> error $ "processBinOp: not supported " ++ show op
-    
+
 replaceVariable :: String -> FuncDecl -> AST -> Z3 AST
 replaceVariable a fnB ast = do
   kind <- getAstKind ast
@@ -239,7 +243,7 @@ replaceVariable a fnB ast = do
         args <- mapM (\i -> getAppArg app i) [0..(nParams-1)]
         args' <- mapM (replaceVariable a fnB) args
         mkApp fnB args' --T.trace ("FN " ++ symName) $ mkApp fn args'
-      else do 
+      else do
         nParams <- getAppNumArgs app
         args <- mapM (\i -> getAppArg app i) [0..(nParams-1)]
         args' <- mapM (replaceVariable a fnB) args
