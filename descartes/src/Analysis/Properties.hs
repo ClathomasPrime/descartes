@@ -16,6 +16,8 @@ import Z3.Monad
 import Analysis.Types
 import Analysis.Util
 
+import Debug.Trace
+
 prop1 :: Prop
 prop1 (args, [res1,res2], fields) = do
     let o11 = safeLookup "trans" (Ident "o11") args
@@ -26,7 +28,7 @@ prop1 (args, [res1,res2], fields) = do
     eq2 <- mkEq o21 o12
     pre <- mkAnd [eq1,eq2]
     i0 <- mkIntNum (0 :: Integer)
-    -- compare(x,y) = 0 iff compare (y,x) = 0 
+    -- compare(x,y) = 0 iff compare (y,x) = 0
     r1eq <- mkEq res1 i0
     r2eq <- mkEq res2 i0
     poseq <- mkIff r1eq r2eq
@@ -45,7 +47,7 @@ prop2 (args, [res1,res2,res3], fields) = do
         o13 = safeLookup "trans" (Ident "o13") args
         o21 = safeLookup "trans" (Ident "o21") args
         o22 = safeLookup "trans" (Ident "o22") args
-        o23 = safeLookup "trans" (Ident "o23") args    
+        o23 = safeLookup "trans" (Ident "o23") args
     eq1 <- mkEq o11 o13
     eq2 <- mkEq o21 o12
     eq3 <- mkEq o22 o23
@@ -58,15 +60,15 @@ prop2 (args, [res1,res2,res3], fields) = do
     r12gt <- mkAnd [r1gt,r2gt]
     pos <- mkImplies r12gt r3gt
     return (pre, pos)
-        
-prop3 :: Prop 
+
+prop3 :: Prop
 prop3 (args, [res1,res2,res3], fields) = do
     let o11 = safeLookup "trans" (Ident "o11") args
         o12 = safeLookup "trans" (Ident "o12") args
         o13 = safeLookup "trans" (Ident "o13") args
         o21 = safeLookup "trans" (Ident "o21") args
         o22 = safeLookup "trans" (Ident "o22") args
-        o23 = safeLookup "trans" (Ident "o23") args    
+        o23 = safeLookup "trans" (Ident "o23") args
     eq1 <- mkEq o11 o12
     eq2 <- mkEq o21 o13
     eq3 <- mkEq o22 o23
@@ -81,7 +83,7 @@ prop3 (args, [res1,res2,res3], fields) = do
     -- compare(x,z) = 0 iff compare (y,z) = 0
     r2eq <- mkEq res2 i0
     r3eq <- mkEq res3 i0
-    poseq <- mkIff r2eq r3eq    
+    poseq <- mkIff r2eq r3eq
     pos' <- mkAnd [posgt,poseq]
     pos <- mkImplies r1 pos'
     return (pre, pos)
@@ -94,7 +96,7 @@ prop4 (args, [res1,res2,res3], fields) = do
         o13 = safeLookup "trans" (Ident "o13") args
         o21 = safeLookup "trans" (Ident "o21") args
         o22 = safeLookup "trans" (Ident "o22") args
-        o23 = safeLookup "trans" (Ident "o23") args    
+        o23 = safeLookup "trans" (Ident "o23") args
     eq1 <- mkEq o11 o13
     eq2 <- mkEq o21 o12
     eq3 <- mkEq o22 o23
@@ -109,7 +111,7 @@ prop4 (args, [res1,res2,res3], fields) = do
     return (pre, pos)
 
 -- [Equals] Symmetry
-prop5 :: Prop 
+prop5 :: Prop
 prop5 (args, [res1,res2], fields) = do
     let o11 = safeLookup "symm" (Ident "o11") args
         o12 = safeLookup "symm" (Ident "o12") args
@@ -126,7 +128,7 @@ prop5 (args, [res1,res2], fields) = do
     return (pre, pos)
 
 -- [Equals] Consistency
-prop6 :: Prop 
+prop6 :: Prop
 prop6 (args, [res1,res2], fields) = do
     let o11 = safeLookup "symm" (Ident "o11") args
         o12 = safeLookup "symm" (Ident "o12") args
@@ -140,7 +142,7 @@ prop6 (args, [res1,res2], fields) = do
     return (pre, pos)
 
 -- transitivity
--- forall (o11,o21,o12,o22,o13,o23). 
+-- forall (o11,o21,o12,o22,o13,o23).
 --      o11 = o13 and o12 = o21 and o22 = o23
 --  =>  ((res1 > 0 and res2 > 0) => res3 > 0)
 transitivity :: Prop
@@ -150,7 +152,7 @@ transitivity (args, [res1,res2,res3], fields) = do
         o13 = safeLookup "trans" (Ident "o13") args
         o21 = safeLookup "trans" (Ident "o21") args
         o22 = safeLookup "trans" (Ident "o22") args
-        o23 = safeLookup "trans" (Ident "o23") args    
+        o23 = safeLookup "trans" (Ident "o23") args
     eq1 <- mkEq o11 o13
     eq2 <- mkEq o21 o12
     eq3 <- mkEq o22 o23
@@ -222,3 +224,47 @@ testProp (args, [res], fields) = do
     pre <- mkTrue
     pos <- mkEq res i0
     return (pre,pos)
+
+-- =========== ========== ========== ========== ========= --
+
+allEq :: MonadZ3 z3 => [AST] -> z3 AST
+-- allEq = foldlM phi =<< mkTrue
+--   where phi :: AST -> AST -> ast
+allEq [] = mkTrue
+allEq [a] = mkTrue
+allEq (a:as) = do
+  here <- mapM (mkEq a) as
+  rest <- allEq as
+  mkAnd $ rest:here
+
+
+prop101 :: Prop
+prop101 (args, [res1,res2,res3], fields) = do
+    -- base
+    let o11 = safeLookup "hi homo11" (Ident "b1")
+          $ traceShowId args
+        o12 = safeLookup "homo12" (Ident "b2") args
+        o13 = safeLookup "homo13" (Ident "b3") args
+    eq1 <- allEq [o11, o12, o13]
+
+    -- modulus
+    let o21 = safeLookup "homo21" (Ident "n1") args
+        o22 = safeLookup "homo22" (Ident "n2") args
+        o23 = safeLookup "homo23" (Ident "n3") args
+    eq2 <- allEq [o21, o22, o23]
+
+    -- exponent
+    let x = safeLookup "homo31" (Ident "e1") args
+        y = safeLookup "homo32" (Ident "e2") args
+        xy = safeLookup "homo33" (Ident "e3") args
+
+    traceM "hi"
+    added <- mkAdd [x, y]
+    traceM "by"
+    pre <- mkEq added xy
+
+    multed <- mkMul [res1, res2]
+    modded <- mkMod multed o21
+    post <- mkEq modded res3
+
+    return (pre, post)

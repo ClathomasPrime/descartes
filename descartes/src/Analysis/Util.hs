@@ -19,17 +19,17 @@ safeLookup :: Ord k => String -> k -> Map k a -> a
 safeLookup err k m = case M.lookup k m of
     Nothing -> error err
     Just a  -> a
-    
+
 class GetInfo a where
     getInfo :: a -> ClassMap
 
 instance GetInfo CompilationUnit where
-    getInfo (CompilationUnit _ _ typeDecls) = 
+    getInfo (CompilationUnit _ _ typeDecls) =
         foldl (\acc tyDecl -> M.union acc $ getInfo tyDecl) M.empty typeDecls
 
 instance GetInfo TypeDecl where
     getInfo tyDecl = case tyDecl of
-        ClassTypeDecl classDecl -> getInfo classDecl 
+        ClassTypeDecl classDecl -> getInfo classDecl
         InterfaceTypeDecl interDecl -> M.empty
 
 instance GetInfo ClassDecl where
@@ -48,7 +48,7 @@ getField mdecl = case mdecl of
     FieldDecl mods ty vardecls -> [mdecl]
     MethodDecl mods ty rty ident pars exTy (MethodBody Nothing) -> [mdecl]
     _ -> []
-    
+
 data CompInter = Comparator | Comparable | None
   deriving (Show,Eq,Ord)
 
@@ -56,12 +56,13 @@ class GetComps a where
     getComps :: a -> Comparators
 
 instance GetComps CompilationUnit where
-    getComps (CompilationUnit _ _ typeDecls) = 
-        foldl (\acc tyDecl -> getComps tyDecl ++ acc) [] typeDecls
+    getComps (CompilationUnit _ _ typeDecls) =
+      -- trace ("hiCompilComps " ++ show typeDecls) $
+        foldl (\acc tyDecl -> getComps tyDecl ++ acc) [] typeDecls
 
 instance GetComps TypeDecl where
     getComps tyDecl = case tyDecl of
-        ClassTypeDecl classDecl -> getComps classDecl 
+        ClassTypeDecl classDecl -> getComps classDecl
         InterfaceTypeDecl interDecl -> []
 
 instance GetComps ClassDecl where
@@ -76,7 +77,7 @@ implComp :: [RefType] -> [CompInter]
 implComp refTys = foldl (\a rty -> implComp' rty ++ a) [] refTys
   where implComp' (ClassRefType (ClassType pIdent_)) = foldl (\a (i,_) -> toCompInter i ++ a) [] pIdent_
         implComp' (ArrayType _) = []
-      
+
 toCompInter :: Ident -> [CompInter]
 toCompInter (Ident "Comparator") = [Comparator]
 toCompInter (Ident "Comparable") = [Comparable]
@@ -87,8 +88,8 @@ toComparator (Ident "compare")   = Just Comparator
 toComparator (Ident "compareTo") = Just Comparable
 toComparator (Ident "equals") = Just Comparator
 toComparator _ = Nothing
- 
--- The hasComp parameter specifies whether this class implements the 
+
+-- The hasComp parameter specifies whether this class implements the
 -- one of the interfaces
 -- It does not handle local classes definitions yet.
 getComparators :: [CompInter] -> Decl -> [MemberDecl]
@@ -97,8 +98,8 @@ getComparators hasComp (InitDecl _ _) = []
 
 getComparator :: [CompInter] -> MemberDecl -> [MemberDecl]
 getComparator hasComp decl = case decl of
-    FieldDecl mods ty vardecls -> []    
-    MethodDecl mods typars mTy ident pars exTy mBody -> 
+    FieldDecl mods ty vardecls -> []
+    MethodDecl mods typars mTy ident pars exTy mBody ->
       case toComparator ident of
           Nothing -> []
           Just comp -> [decl] --if comp `elem` hasComp
@@ -116,11 +117,11 @@ getComparator hasComp decl = case decl of
 -- k-Safety hyperproperty
 --type HyperProp = (Precondition, Postcondition)
 --type Precondition = []
--- This spec specifies how many runs we are interested 
+-- This spec specifies how many runs we are interested
 type Spec = Int
-    
+
 --  type Substitutions = Map Ident Ident
-        
+
 getObjectType :: Comparator -> String
 getObjectType (Comp (Ident str) _ ) = str
 
@@ -158,13 +159,13 @@ instance RetrieveFnCalls BlockStmt where
 instance RetrieveFnCalls VarDecl where
   getFnCalls (VarDecl vardeclid Nothing) = []
   getFnCalls (VarDecl vardeclid (Just i)) = getFnCalls i
-    
+
 instance RetrieveFnCalls VarInit where
   getFnCalls (InitExp expr) = getFnCalls expr
   getFnCalls (InitArray _) = []
 
 instance RetrieveFnCalls Stmt where
-  getFnCalls stm = case stm of 
+  getFnCalls stm = case stm of
     StmtBlock block -> getFnCalls block
     IfThen cond _then -> getFnCalls cond ++ getFnCalls _then
     IfThenElse cond _then _else -> getFnCalls cond ++ getFnCalls _then ++ getFnCalls _else
@@ -177,13 +178,13 @@ instance RetrieveFnCalls Stmt where
 instance RetrieveFnCalls (Maybe [Exp]) where
   getFnCalls Nothing = []
   getFnCalls (Just exprs) = concatMap getFnCalls exprs
-  
+
 instance RetrieveFnCalls (Maybe Exp) where
   getFnCalls Nothing = []
   getFnCalls (Just expr) = getFnCalls expr
 
 instance RetrieveFnCalls Exp where
-  getFnCalls _exp = case _exp of 
+  getFnCalls _exp = case _exp of
     FieldAccess fieldAccess -> getFnCalls fieldAccess
     MethodInv methodInvocation -> getFnCalls methodInvocation
     BinOp lhs op rhs -> getFnCalls lhs ++ getFnCalls rhs
@@ -203,7 +204,7 @@ instance RetrieveFnCalls MethodInvocation where
 {-
 Alfa-renaming:
   - I need to substitute the object parameters
-  - I need to substitute the local variables with some subscript 
+  - I need to substitute the local variables with some subscript
 -}
 
 -- alfa: performs the renaming
@@ -214,10 +215,10 @@ class Renamable a where
 
 instance Renamable Comparator where
     rename idx (Comp mth mdecl) = Comp mth $ rename idx mdecl
-    
+
 instance Renamable MemberDecl where
-    rename idx mdecl = case mdecl of 
-        MethodDecl mods typar mty ident pars exty body -> 
+    rename idx mdecl = case mdecl of
+        MethodDecl mods typar mty ident pars exty body ->
             let npars = map (rename idx) pars
                 nbody = rename idx body
             in MethodDecl mods typar mty ident npars exty nbody
@@ -229,11 +230,11 @@ instance Renamable FormalParam where
 instance Renamable VarDecl where
     rename idx (VarDecl vardeclid Nothing) = VarDecl (rename idx vardeclid) Nothing
     rename idx (VarDecl vardeclid (Just i)) = VarDecl (rename idx vardeclid) (Just $ rename idx i)
-    
+
 instance Renamable VarInit where
     rename idx (InitExp expr) = InitExp $ rename idx expr
     rename idx (InitArray _) = error "InitArray not supported"
-    
+
 instance Renamable VarDeclId where
     rename idx (VarId ident) = VarId $ rename idx ident
     rename idx (VarDeclArray varid) = VarDeclArray $ rename idx varid
@@ -244,7 +245,7 @@ instance Renamable Ident where
 instance Renamable (Maybe Ident) where
     rename idx Nothing = Nothing
     rename idx (Just ident) = Just $ rename idx ident
-    
+
 instance Renamable MethodBody where
     rename idx (MethodBody mbody) = case mbody of
         Nothing -> MethodBody Nothing
@@ -252,7 +253,7 @@ instance Renamable MethodBody where
 
 instance Renamable Block where
     rename idx (Block block) = Block $ map (rename idx) block
-    
+
 instance Renamable BlockStmt where
     rename idx stm = case stm of
         BlockStmt st -> BlockStmt $ rename idx st
@@ -260,14 +261,14 @@ instance Renamable BlockStmt where
         LocalClass classdecl -> error "rename: LocalClass is not supported"
 
 instance Renamable Stmt where
-    rename idx stm = case stm of 
+    rename idx stm = case stm of
         StmtBlock block -> StmtBlock $ rename idx block
-        IfThen cond _then -> IfThen (rename idx cond) $ rename idx _then 
+        IfThen cond _then -> IfThen (rename idx cond) $ rename idx _then
         IfThenElse cond _then _else -> IfThenElse (rename idx cond) (rename idx _then) (rename idx _else)
         While cond _body -> While (rename idx cond) (rename idx _body)
-        BasicFor mForInit mExp mLExp _body -> 
+        BasicFor mForInit mExp mLExp _body ->
             case mForInit of
-                Just (ForLocalVars mods ty vardecls) -> 
+                Just (ForLocalVars mods ty vardecls) ->
                     let b1 = LocalVars mods ty vardecls
                         cond = case mExp of
                             Nothing -> error $ "rename: BasicFor not supported" -- ++ show (mForInit, mExp, mLExp)
@@ -297,17 +298,17 @@ instance Renamable Stmt where
 instance Renamable (Maybe Exp) where
     rename idx Nothing = Nothing
     rename idx (Just expr) = Just $ rename idx expr
-    
+
 instance Renamable Exp where
-    rename idx _exp = case _exp of 
+    rename idx _exp = case _exp of
         Lit lit -> Lit lit
         ClassLit mty -> ClassLit mty
         This -> This
         ThisClass name -> ThisClass name
         InstanceCreation lTyArgs classTy args mBody -> error "rename: InstanceCreation not supported"
         QualInstanceCreation expr lTyArgs ident args mBody -> error "rename: QualInstanceCreation not supported"
-        ArrayCreate ty exprs int -> error "rename: ArrayCreate not supported" 
-        ArrayCreateInit ty int aInit -> error "rename: ArrayCreateInit not supported" 
+        ArrayCreate ty exprs int -> error "rename: ArrayCreate not supported"
+        ArrayCreateInit ty int aInit -> error "rename: ArrayCreateInit not supported"
         ArrayAccess aIndex -> error "rename: ArrayAccess not supported"
         FieldAccess fieldAccess -> FieldAccess $ rename idx fieldAccess
         MethodInv methodInvocation -> MethodInv $ rename idx methodInvocation
@@ -325,13 +326,13 @@ instance Renamable Exp where
         InstanceOf expr reftype -> error "rename: InstanceOf not supported"
         Cond _cond _then _else -> Cond (rename idx _cond) (rename idx _then) $ rename idx _else
         Assign lhs aOp expr -> Assign (rename idx lhs) aOp $ rename idx expr
-            
+
 instance Renamable FieldAccess where
     rename idx fAccess = case fAccess of
         PrimaryFieldAccess obj fIdent -> PrimaryFieldAccess (rename idx obj) fIdent
         SuperFieldAccess fIdent -> SuperFieldAccess fIdent
         ClassFieldAccess cName fIdent -> ClassFieldAccess cName fIdent
-    
+
 instance Renamable MethodInvocation where
     rename idx mInv = case mInv of
         MethodCall name@(Name [Ident "assume"]) args -> MethodCall name $ map (rename idx) args
@@ -351,16 +352,16 @@ instance Renamable MethodInvocation where
             -- | Invoking a method of the superclass of a named class, giving arguments for any generic type parameters.
             | ClassMethodCall Name [RefType] Ident [Argument]
             -- | Invoking a method of a named type, giving arguments for any generic type parameters.
-            | TypeMethodCall  Name [RefType] Ident [Argument] 
+            | TypeMethodCall  Name [RefType] Ident [Argument]
     -}
-    
+
 instance Renamable Name where
-    rename idx (Name [ident]) = 
+    rename idx (Name [ident]) =
         Name [rename idx ident]
-    rename idx (Name idents) = 
+    rename idx (Name idents) =
         let idents' = map (rename idx) $ init idents
         in Name $ idents' ++ [last idents]
-    
+
 instance Renamable Lhs where
     rename idx _lhs = case _lhs of
         NameLhs name -> NameLhs $ rename idx name
@@ -374,12 +375,12 @@ instance Rewritable Comparator where
     rewrite (Comp mth mdecl) = Comp mth $ rewrite mdecl
 
 instance Rewritable MemberDecl where
-    rewrite mdecl = case mdecl of 
-        MethodDecl mods typar mty ident pars exty body -> 
+    rewrite mdecl = case mdecl of
+        MethodDecl mods typar mty ident pars exty body ->
             let nbody = rewrite body
             in MethodDecl mods typar mty ident pars exty nbody
         _ -> error "attemping to rewrite a MemberDecl which is not a MethodDecl"
-        
+
 instance Rewritable MethodBody where
     rewrite (MethodBody mbody) = case mbody of
         Nothing -> MethodBody Nothing
@@ -387,7 +388,7 @@ instance Rewritable MethodBody where
 
 instance Rewritable Block where
     rewrite (Block block) = Block $ map rewrite block
-    
+
 instance Rewritable BlockStmt where
     rewrite stm = case stm of
         BlockStmt st -> BlockStmt $ rewrite st
@@ -395,11 +396,11 @@ instance Rewritable BlockStmt where
         LocalClass classdecl -> error "rewrite: LocalClass is not supported"
 
 instance Rewritable Stmt where
-    rewrite stm = case stm of 
+    rewrite stm = case stm of
         StmtBlock block -> StmtBlock $ rewrite block
-        IfThen cond _then -> IfThen cond $ rewrite _then 
+        IfThen cond _then -> IfThen cond $ rewrite _then
         IfThenElse cond _then _else -> IfThenElse cond (rewrite _then) (rewrite _else)
-        While cond _body -> transform $ normalize stm 
+        While cond _body -> transform $ normalize stm
         BasicFor mForInit mExp mLExp _body -> error "rewrite: BasicFor not supported"
         EnhancedFor mods ty ident expr _body -> error "rewrite: EnhancedFor not supported"
         Empty -> Empty
@@ -422,30 +423,30 @@ instance Rewritable Exp where
     MethodInv (MethodCall name@(Name [Ident "String",Ident "compareIgnoreCase"]) args) ->
       BinOp (args!!0) Sub (args!!1)
     _ -> expr
-    
+
 -- apply the transform rules
 transform :: Stmt -> Stmt
-transform (While cond body) = 
+transform (While cond body) =
     case body of
-        StmtBlock (Block bstm) -> 
-            let (_cond, _body, (Block rest)) = trans bstm                
+        StmtBlock (Block bstm) ->
+            let (_cond, _body, (Block rest)) = trans bstm
                 loop = While _cond (StmtBlock _body)
             in StmtBlock $ Block $ [BlockStmt loop] ++ rest
         _ -> error "transform"
 
 trans :: [BlockStmt] -> (Exp, Block, Block)
-trans [BlockStmt (IfThenElse _cond (StmtBlock _then) _else)] = 
+trans [BlockStmt (IfThenElse _cond (StmtBlock _then) _else)] =
     let ass = Assume $ PreNot _cond
         _else' = case _else of
             Break _ -> []
             Return _ -> [BlockStmt _else]
-            StmtBlock (Block bstm) -> 
+            StmtBlock (Block bstm) ->
                 case last bstm of
                     BlockStmt (Break _) -> init bstm
                     _ -> bstm -- need to change this: remove break statement if exists
         rest = Block $ (BlockStmt ass):_else'
     in (_cond, _then, rest)
-trans ((BlockStmt (IfThenElse _cond t@(StmtBlock (Block _then)) _else)):r) = 
+trans ((BlockStmt (IfThenElse _cond t@(StmtBlock (Block _then)) _else)):r) =
     let (c', Block s', Block s'') = trans r
         c'' = BinOp _cond And $ wp t c'
         _then' = Block $ _then ++ s'
@@ -461,7 +462,7 @@ trans ((BlockStmt (IfThenElse _cond t@(StmtBlock (Block _then)) _else)):r) =
 
 -- simple weakest pre-condition
 wp :: Stmt -> Exp -> Exp
-wp stm phi = case stm of 
+wp stm phi = case stm of
     StmtBlock (Block bstm) -> foldr (\(BlockStmt stm) phi' -> wp stm phi') phi bstm
     ExpStmt expr -> wpExpr expr phi
     _ -> error $ "wp:" ++ show stm ++ " not supported"
@@ -472,8 +473,8 @@ wpExpr (MethodInv (MethodCall (Name [Ident "assume"]) rhs)) phi = Lit $ Boolean 
 wpExpr expr phi = error $ "wpExpr: " ++ show expr ++ " not supported"
 
 replace :: Name -> Exp -> Exp -> Exp
-replace name rhs phi = 
-    case phi of 
+replace name rhs phi =
+    case phi of
         Lit lit -> phi
         BinOp left op right -> BinOp (replace name rhs left) op (replace name rhs right)
         ExpName _name -> if name == _name then rhs else phi
@@ -485,14 +486,14 @@ replace name rhs phi =
         PreMinus      expr -> PreMinus      $ replace name rhs expr
         PreBitCompl   expr -> PreBitCompl   $ replace name rhs expr
         PreNot        expr -> PreNot        $ replace name rhs expr
-        MethodInv (MethodCall _name args) -> 
+        MethodInv (MethodCall _name args) ->
             let args' = map (replace name rhs) args
                 nname = if name == _name then error "dont know what to do" else _name
             in MethodInv $ MethodCall nname args'
         _ -> error $ "replace: " ++ show phi ++ " not supported"
 
 normalize :: Stmt -> Stmt
-normalize (While cond body) = 
+normalize (While cond body) =
     let (lHead, rest) = loopHead body
         lHead' = map BlockStmt lHead
         _then = StmtBlock (Block lHead')
@@ -501,55 +502,55 @@ normalize (While cond body) =
         cbN = loopConditions rest
         nBody = StmtBlock $ Block $ map BlockStmt (cb1:cbN)
         nCond = Lit $ Boolean True
-    in if checkBody nBody 
+    in if checkBody nBody
        then While nCond nBody
        else error "normalize: not the right final body format"
 normalize _ = error "normalize: not a while loop"
 
 -- check that loop body is of the format in the paper
 checkBody :: Stmt -> Bool
-checkBody stm = case stm of 
+checkBody stm = case stm of
     StmtBlock (Block bstm) -> all checkCondition bstm
     _ -> error "checkBody"
-    
+
 checkCondition :: BlockStmt -> Bool
 checkCondition (BlockStmt (IfThenElse _ _ _)) = True
 checkCondition _ = False
 
--- loopHead: under some condition, splits the statement 
---  into two parts: 
+-- loopHead: under some condition, splits the statement
+--  into two parts:
 --   1. The statements that always execute under this condition
 --   2. Either the break/return, or a conditional that contains a break
 loopHead :: Stmt -> ([Stmt],[Stmt])
-loopHead stm = case stm of 
+loopHead stm = case stm of
     StmtBlock (Block bstm) -> splitBody bstm
     Break mident -> ([], [stm])
     Return mexp -> ([], [stm])
-    IfThen cond _then -> 
+    IfThen cond _then ->
         if containsBreak _then
         then ([], [stm])
         else ([stm],[])
-    IfThenElse cond _then _else -> 
+    IfThenElse cond _then _else ->
         if containsBreak _then || containsBreak _else
         then ([], [stm])
         else ([stm],[])
     _ -> ([stm],[])
-    
+
 splitBody :: [BlockStmt] -> ([Stmt], [Stmt])
 splitBody [] = ([], [])
-splitBody ((BlockStmt stm):rest) = 
+splitBody ((BlockStmt stm):rest) =
     case loopHead stm of
-        (left, []) -> 
+        (left, []) ->
             let (left', right) = splitBody rest
             in (left ++ left', right)
-        (left, right) -> (left, right ++ [StmtBlock (Block rest)])        
+        (left, right) -> (left, right ++ [StmtBlock (Block rest)])
 splitBody l = error $ "splitBody: BlockStmt is not BlockStmt: " ++ show l
 
 loopConditions :: [Stmt] -> [Stmt]
 loopConditions [] = []
-loopConditions (s:ss) = 
+loopConditions (s:ss) =
     case s of
-        IfThen cond _then -> 
+        IfThen cond _then ->
             if containsBreak _then
             then let stm = StmtBlock $ Block $ map BlockStmt ss
                      (lHead, rest) = loopHead stm
@@ -565,11 +566,11 @@ loopConditions (s:ss) =
 containsBreak :: Stmt -> Bool
 containsBreak stm = case stm of
     StmtBlock (Block bstm) -> any containsBreak' bstm
-    IfThen cond _then -> 
+    IfThen cond _then ->
         if containsBreak _then
         then error "containsBreak in nested conditional: can't apply the transform rule!"
         else False
-    IfThenElse cond _then _else -> 
+    IfThenElse cond _then _else ->
         if containsBreak _then && containsBreak _else
         then error "containsBreak in nested conditional: can't apply the transform rule!"
         else False
@@ -582,8 +583,8 @@ containsBreak' (BlockStmt stm) = containsBreak stm
 containsBreak' _ = False
 
 replaceExp :: Ident -> Ident -> Exp -> Exp
-replaceExp i j phi = 
-  case phi of 
+replaceExp i j phi =
+  case phi of
     Lit lit -> phi
     BinOp left op right -> BinOp (replaceExp i j left) op (replaceExp i j right)
     ExpName (Name names) -> ExpName $ Name $ map (\ident -> if ident == i then j else ident) names
@@ -597,7 +598,7 @@ replaceExp i j phi =
     PreNot        expr -> PreNot        $ replaceExp i j expr
     MethodInv (MethodCall name@(Name [Ident "String",Ident "compareIgnoreCase"]) args) ->
       BinOp (args!!0) Sub (args!!1)
-    MethodInv (MethodCall _name args) -> 
+    MethodInv (MethodCall _name args) ->
         let args' = map (replaceExp i j) args
         in MethodInv $ MethodCall _name args'
     _ -> error $ "replace: " ++ show phi ++ " not supported"

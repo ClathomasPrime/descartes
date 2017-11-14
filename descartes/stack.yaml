@@ -1,0 +1,14 @@
+
+resolver: lts-9.11
+packages:
+- .
+# - location: ../dependencies/z3-4.0.0/
+#   extra-dep: true
+- location: ../dependencies/language-java-0.2.7/
+  extra-dep: true
+
+extra-deps: [ z3-4.1.2 ]
+
+flags: {}
+
+extra-package-dbs: []
